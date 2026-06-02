@@ -1,0 +1,66 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: us-west-1
+  ECR_REPOSITORY: eks-platform-dev
+  EKS_CLUSTER: eks-platform-dev
+  HELM_RELEASE: eks-platform-app
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    name: Build, Push, Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::AWS_ACCOUNT_ID:role/github-actions-eks-platform-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./app
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+
+      - name: Deploy with Helm
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} ./helm/app \
+            --set image.repository=$ECR_REGISTRY/$ECR_REPOSITORY \
+            --set image.tag=$IMAGE_TAG \
+            --set env.APP_VERSION=$IMAGE_TAG \
+            --wait --timeout 5m
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/${{ env.HELM_RELEASE }}
+          kubectl get pods -l app=${{ env.HELM_RELEASE }}
