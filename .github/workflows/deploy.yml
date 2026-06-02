@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: us-west-1
-  ECR_REPOSITORY: eks-platform-dev
+  ECR_REPOSITORY: eks-platform-dev/app
   EKS_CLUSTER: eks-platform-dev
   HELM_RELEASE: eks-platform-app
 

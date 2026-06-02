@@ -1,7 +1,7 @@
 replicaCount: 2
 
 image:
-  repository: AWS_ACCOUNT_ID.dkr.ecr.us-west-1.amazonaws.com/eks-platform-dev
+  repository: AWS_ACCOUNT_ID.dkr.ecr.us-west-1.amazonaws.com/eks-platform-dev/app
   pullPolicy: Always
   tag: "latest"
 
